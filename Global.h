@@ -15,8 +15,8 @@ enum g_signname
 	minusequal ,multiequal ,divideequal ,modelequal ,andequal ,orequal ,xorequal ,pointto ,turnleft ,turnright ,
 	//	  40>=       41<=       42!=   43&& 44|| 45.   46#       47//         48/*         49*/
 	greaterequal ,lessequal ,notequal ,and ,or , dot , sharp , doubleslash , slashstar , starslash , 
-	//    50<<=        51>>=
-	leftmoveequal , rightmoveequal ,
+	//    50<<=        51>>=          52::
+	leftmoveequal , rightmoveequal ,doublesemicolon,
 };
 
 extern unsigned char g_signconfig[MAX_SYMBOL_TYPE];

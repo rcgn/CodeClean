@@ -3,7 +3,7 @@
 #include "stdafx.h"
 #include "CodeClean.h"
 #include "CodeCleanDlg.h"
-
+#include <locale.h>
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -168,6 +168,7 @@ void CCodeCleanDlg::OnBnClickedOk()
 	    if(m_Foldername != "")
 	    {
 			m_PathFile = m_Foldername + _T("//PathFile.txt");
+			setlocale( LC_CTYPE,"chs");
 			int res = pathfile.Open(m_PathFile,CStdioFile::modeCreate | CStdioFile::modeWrite , NULL);
 			if(res)
 			{
@@ -295,9 +296,17 @@ int CCodeCleanDlg::FileSearch(CString const p_Foldername)
 		{
 			//只处理后缀名是.c和.cpp的文件
 			char tmp_path[256] = {0};
+			int i =0;
 			path +="\n";
-			WideCharToMultiByte(CP_OEMCP,NULL,path,-1,tmp_path,path.GetLength(),NULL,FALSE);
-			pathfile.Write(tmp_path,path.GetLength());
+			WideCharToMultiByte(CP_OEMCP,NULL,path,-1,tmp_path,256,NULL,FALSE);
+			for(i = 0;i<256;i++)
+			{
+				if(tmp_path[i] == 0)
+				{
+					break;
+				}
+			}
+			pathfile.Write(tmp_path,i);
 		}
 	}
 		return 0;

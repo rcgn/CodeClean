@@ -17,7 +17,7 @@ public:
 	void StringCombine(void);
 	int  SymbolTypeCheck(int index);
 	int	 LineSplit(int index ,int symbol, int last_symbol );
-
+	int  BracketNumCheck(void);
 private:                      
 	CString		m_filepath;  //待整理文件的路径
 	CString		m_directory; //保存old_file所在的文件夹路径
@@ -33,14 +33,16 @@ private:
 	int			pre_blank_num;              //每一行前面的空格数
 	int			next_pre_blank_num;         //下一行前面的空格数，主要是为了兼容“}”
 	int			buf_index;					//tmp_string_buf向量的索引
-	int			bracket_num;				//括号匹配，左括号+1，右括号-1，全文累加，若一行结束时，不为0，则下一行开头缩进一个tab。
-
+	int			bracket_num;				//括号匹配，左括号+1，右括号-1，全文累加，若一行结束时，不为0，则下一行开头缩进一个tab
+	int			last_bracket_num;
+	int			line_status;			//上一行结束时的状态，用于处理/**/注释及引号
 
 	vector< CString >	tmp_string_buf;   //保存待整理文件每行拆分后的字符串
 	vector< int >		tmp_string_buf_type;//记录每一个字符串的类型：START-QUOTATION
 
 //               开始    空白     符号    括号        字符or数字    引号     
-	enum		{START , BLANK , SYMBOL ,BRACKETS , CHAR_OR_NUM , QUOTATION   }; //tmp_string_buf存储的字符串的类型。
+	enum		{START , BLANK , SYMBOL ,BRACKETS , CHAR_OR_NUM , QUOTATION  ,NOTE_STAR_START ,NOTE_STAR_END ,NOTE_SLASH }; //tmp_string_buf存储的字符串的类型。
+
 
 };
 

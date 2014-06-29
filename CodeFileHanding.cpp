@@ -24,6 +24,7 @@ void CodeFileHanding::SetFilePath(CString p_filepath)
 	bracket_num = 0;
 	pre_blank_num =0;
 	next_pre_blank_num = 0;
+	line_status = START;
 	old_string = "";
 	new_string = "";
 	m_filepath = p_filepath;
@@ -43,8 +44,16 @@ void CodeFileHanding::SetFilePath(CString p_filepath)
 	CopyFile(m_filepath,m_filepathtmp,FALSE);
 
 }
+/* /////////////////////////////////////
+输 入：无
+输 出：
+功 能：对单个文件进行处理
+*/ /////////////////////////////////////
 int CodeFileHanding::DoFileClean()
 {
+	int blank_num = 0;
+	int last_line_status =START;
+
 	if(!code_file.Open(m_filepath,CStdioFile::modeCreate | CStdioFile::modeWrite))
 	{
 		MessageBox(_T("打开文件失败：")+m_filepath);
@@ -58,31 +67,38 @@ int CodeFileHanding::DoFileClean()
 
 	while(old_file.ReadString(old_string))
 	{
-
+		//变量初始化
 		new_string = "";
 		for(int i=0;i<256;i++)
 		{
 			tmp_string_buf[i] = "";
 			tmp_string_buf_type[i] = START;
 		}
-		StringAnalyze();//行拆分
+		//行拆分
+		StringAnalyze();
 
-		StringCombine();//行组合
-		
-		if(bracket_num != 0)
+		//行组合
+		StringCombine();
+
+		//空格计算与行写入
+		if(line_status == START && last_line_status == START )	///**/中保存原来面目，不做处理，两个状态用来处理*/符号
 		{
-			for(int i =0 ;i<pre_blank_num;i++)
+			blank_num = BracketNumCheck();//空格计算
+
+			for(int i =0 ;i<blank_num;i++)
 			{
 				code_file.WriteString(L" ");
 			}
+			code_file.WriteString(new_string+"\n");
 		}
-		for(int i =0 ;i<pre_blank_num;i++)
+		else
 		{
-			code_file.WriteString(L" ");
+			code_file.WriteString(old_string+"\n");
 		}
-		code_file.WriteString(new_string+"\n");
-		pre_blank_num = next_pre_blank_num;
+
+		//变量清理
 		old_string = "";
+		last_line_status = line_status ;
 	}
 	code_file.Close();
 	old_file.Close();
@@ -93,15 +109,21 @@ int CodeFileHanding::DoFileClean()
 void CodeFileHanding::StringAnalyze()//行拆分,将一行源代码按空格和符号拆分成单词和符号。
 {
 	int symbol_type = START;
-	int last_symbol_type = START;
-
-	buf_index = -1;
+	int last_symbol_type = line_status;
+	if(last_symbol_type != START)
+	{
+		buf_index = 0;
+	}
+	else 
+	{
+		buf_index = -1;
+	}
 
 	int string_len = old_string.GetLength() ;
 	for( int i = 0 ;i < string_len ;i++ )
 	{
 		symbol_type = SymbolTypeCheck(i);
-		last_symbol_type = LineSplit( i , symbol_type , last_symbol_type );
+		last_symbol_type = LineSplit(i , symbol_type , last_symbol_type );		
 	}
 
 }
@@ -127,14 +149,6 @@ void CodeFileHanding::StringCombine()//行组合，将单词组合起来
 	}
 	for(i=tmp; i <= buf_index  ;i++)
 	{
-		if(tmp_string_buf[i] == "(")
-		{
-			bracket_num ++;
-		}
-		else if(tmp_string_buf[i] == ")")
-		{
-			bracket_num --;
-		}
 
 		if((tmp_string_buf_type[i] == SYMBOL)||(tmp_string_buf_type[i] == BRACKETS))
 		{
@@ -214,7 +228,7 @@ int  CodeFileHanding::SymbolTypeCheck(int index)
 
 		charactertype = CHAR_OR_NUM ;
 	}
-	else if((old_string[index] == '\'' || old_string[index] == '\"') && old_string[index-1] != '\\')
+	else if((old_string[index] == '\'' || old_string[index] == '\"') && !(((index-1)>=0 &&(old_string[index-1] == '\\')) &&( (index-2 <0)||(old_string[index-2] != '\\'))))
 	{//引号
 
 		charactertype = QUOTATION ;
@@ -223,10 +237,22 @@ int  CodeFileHanding::SymbolTypeCheck(int index)
 	{
 		charactertype = BRACKETS ;
 	}
+	else if((old_string[index] == '/') && (old_string[index+1] == '/'))
+	{
+		charactertype = NOTE_SLASH ;
+	}
+	else if((old_string[index] == '/') && (old_string[index+1] == '*'))
+	{
+		charactertype = NOTE_STAR_START ;
+	}
+	else if((old_string[index] == '/') && (index -1>=0) &&(old_string[index-1] == '*'))
+	{
+		charactertype = NOTE_STAR_END ;
+	}
 	else
 	{//其他，符号
 		charactertype = SYMBOL ;
-		if( old_string[index] == '{')
+/*		if( old_string[index] == '{')
 		{
 			next_pre_blank_num += g_indentation;
 		}
@@ -235,193 +261,11 @@ int  CodeFileHanding::SymbolTypeCheck(int index)
 			pre_blank_num -= g_indentation;
 			next_pre_blank_num -= g_indentation;
 		}
+		*/
 	}
 	return charactertype;
 }
-/*
-int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
-{
-	int linestatus = START;
-	switch(last_symbol)
-	{
-		case START:
-		{
-			if(symbol == START)
-			{
-				linestatus = START;
-				break;
-			}
-			else if (symbol == BLANK)
-			{
-				linestatus = START;
-				break;
-			}
-			else if (symbol == SYMBOL)
-			{
-				linestatus = SYMBOL;
-				tmp_string_buf_type[++buf_index] = SYMBOL;
-			}
-			else if(symbol == BRACKETS)
-			{
-				linestatus = BRACKETS;
-				tmp_string_buf_type[++buf_index] = BRACKETS;
-			}
-			else if (symbol == CHAR_OR_NUM)
-			{
-				linestatus =CHAR_OR_NUM;
-				tmp_string_buf_type[++buf_index] = CHAR_OR_NUM;
-			}
-			else if (symbol == QUOTATION)
-			{
-				linestatus = QUOTATION;
-				tmp_string_buf_type[++buf_index] = QUOTATION;
-			}
-			tmp_string_buf[buf_index] = "";
-			tmp_string_buf[buf_index] += old_string[index];
-			
-			break;
-		}
-		case SYMBOL:
-		{
-			if(symbol == START)
-			{
-				linestatus = START ;
 
-			}
-			else if (symbol == BLANK)
-			{
-				linestatus = START ;
-
-			}
-			else if (symbol == SYMBOL)
-			{
-				linestatus = SYMBOL;
-//				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = SYMBOL;
-			}
-			else if (symbol == BRACKETS)
-			{
-				linestatus = BRACKETS;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = BRACKETS;
-			}
-			else if (symbol == CHAR_OR_NUM)
-			{
-				linestatus = CHAR_OR_NUM;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = CHAR_OR_NUM;
-			}
-			else if (symbol == QUOTATION)
-			{
-				linestatus = QUOTATION;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = QUOTATION;
-			}
-			break;
-		}
-		case CHAR_OR_NUM:
-		{
-			if(symbol == START)
-			{
-				linestatus = START;
-
-			}
-			else if (symbol == BLANK)
-			{
-				linestatus = START;
-
-			}
-			else if (symbol == SYMBOL)
-			{
-				linestatus = SYMBOL;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = SYMBOL;
-			}
-			else if(symbol == BRACKETS)
-			{
-				linestatus = BRACKETS;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = BRACKETS;
-			}
-			else if (symbol == CHAR_OR_NUM)
-			{
-				linestatus = CHAR_OR_NUM;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = CHAR_OR_NUM;
-			}
-			else if (symbol == QUOTATION)
-			{
-				linestatus = QUOTATION;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = QUOTATION;
-			}
-			break;
-		}
-		case QUOTATION:
-		{
-			linestatus = (symbol == QUOTATION) ? START : QUOTATION;
-			tmp_string_buf[buf_index] += old_string[index];
-			tmp_string_buf_type[buf_index] = QUOTATION;
-			if(linestatus != QUOTATION)
-			{
-				tmp_string_buf[++buf_index ] = "" ;
-			}
-			break;
-		}
-		case BRACKETS:
-		{
-			if(symbol == START)
-			{
-				linestatus = START ;
-
-			}
-			else if (symbol == BLANK)
-			{
-				linestatus = START ;
-
-			}
-			else if (symbol == SYMBOL)
-			{
-				linestatus = SYMBOL;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = SYMBOL;
-			}
-			else if (symbol == BRACKETS)
-			{
-				linestatus = BRACKETS;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = BRACKETS;
-			}
-			else if (symbol == CHAR_OR_NUM)
-			{
-				linestatus = CHAR_OR_NUM;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = CHAR_OR_NUM;
-			}
-			else if (symbol == QUOTATION)
-			{
-				linestatus = QUOTATION;
-				tmp_string_buf[++buf_index ] = "" ;
-				tmp_string_buf[buf_index] += old_string[index];
-				tmp_string_buf_type[buf_index] = QUOTATION;
-			}
-			break;
-		}
-	}
-
-	return linestatus;
-}
-*/
 int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 {
 	//TODO:注释排除/*  */
@@ -460,7 +304,20 @@ int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 			{
 				linestatus = QUOTATION;
 				tmp_string_buf_type[++buf_index] = QUOTATION;
+				line_status =  QUOTATION;
 			}
+			else if(symbol == NOTE_SLASH)
+			{
+				linestatus = NOTE_SLASH;
+				tmp_string_buf_type[++buf_index] = NOTE_SLASH;
+			}
+			else if(symbol == NOTE_STAR_START)
+			{
+				linestatus = NOTE_STAR_START;
+				tmp_string_buf_type[++buf_index] = NOTE_STAR_START;
+				line_status =  NOTE_STAR_START;
+			}
+
 			tmp_string_buf[buf_index] = "";
 			tmp_string_buf[buf_index] += old_string[index];
 
@@ -514,7 +371,24 @@ int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 				tmp_string_buf[++buf_index ] = "" ;
 				tmp_string_buf[buf_index] += old_string[index];
 				tmp_string_buf_type[buf_index] = QUOTATION;
+				line_status =  QUOTATION;
 			}
+			else if(symbol == NOTE_SLASH)
+			{
+				linestatus = NOTE_SLASH ;
+				tmp_string_buf[++buf_index ] = "" ;
+				tmp_string_buf[buf_index] += old_string[index];
+				tmp_string_buf_type[buf_index] = NOTE_SLASH ;
+			}
+			else if(symbol == NOTE_STAR_START)
+			{
+				linestatus = NOTE_STAR_START ;
+				tmp_string_buf[++buf_index ] = "" ;
+				tmp_string_buf[buf_index] += old_string[index];
+				tmp_string_buf_type[buf_index] = NOTE_STAR_START ;
+				line_status =  NOTE_STAR_START;
+			}
+
 			break;
 		}
 	case CHAR_OR_NUM:
@@ -555,6 +429,22 @@ int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 				tmp_string_buf[++buf_index ] = "" ;
 				tmp_string_buf[buf_index] += old_string[index];
 				tmp_string_buf_type[buf_index] = QUOTATION;
+				line_status =  QUOTATION;
+			}
+			else if(symbol == NOTE_SLASH)
+			{
+				linestatus = NOTE_SLASH ;
+				tmp_string_buf[++buf_index ] = "" ;
+				tmp_string_buf[buf_index] += old_string[index];
+				tmp_string_buf_type[buf_index] = NOTE_SLASH ;
+			}
+			else if(symbol == NOTE_STAR_START)
+			{
+				linestatus = NOTE_STAR_START ;
+				tmp_string_buf[++buf_index ] = "" ;
+				tmp_string_buf[buf_index] += old_string[index];
+				tmp_string_buf_type[buf_index] = NOTE_STAR_START ;
+				line_status =  NOTE_STAR_START;
 			}
 			break;
 		}
@@ -566,6 +456,7 @@ int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 			if(linestatus != QUOTATION)
 			{
 				tmp_string_buf[++buf_index ] = "" ;
+				line_status =  START;
 			}
 			break;
 		}
@@ -594,6 +485,7 @@ int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 				tmp_string_buf[++buf_index ] = "" ;
 				tmp_string_buf[buf_index] += old_string[index];
 				tmp_string_buf_type[buf_index] = BRACKETS;
+				
 			}
 			else if (symbol == CHAR_OR_NUM)
 			{
@@ -608,9 +500,91 @@ int CodeFileHanding::LineSplit(int index ,int symbol, int last_symbol )
 				tmp_string_buf[++buf_index ] = "" ;
 				tmp_string_buf[buf_index] += old_string[index];
 				tmp_string_buf_type[buf_index] = QUOTATION;
+				line_status =  QUOTATION;
+			}
+			else if(symbol == NOTE_SLASH)
+			{
+				linestatus = NOTE_SLASH ;
+				tmp_string_buf[++buf_index ] = "" ;
+				tmp_string_buf[buf_index] += old_string[index];
+				tmp_string_buf_type[buf_index] = NOTE_SLASH ;
+			}
+			else if(symbol == NOTE_STAR_START)
+			{
+				linestatus = NOTE_STAR_START ;
+				tmp_string_buf[++buf_index ] = "" ;
+				tmp_string_buf[buf_index] += old_string[index];
+				tmp_string_buf_type[buf_index] = NOTE_STAR_START ;
+				line_status =  NOTE_STAR_START;
+			}
+			break;
+		}
+	case NOTE_SLASH:
+		{
+			linestatus = NOTE_SLASH ;
+			tmp_string_buf[buf_index] += old_string[index];
+			tmp_string_buf_type[buf_index] = NOTE_SLASH;
+
+			break ;
+		}
+	case NOTE_STAR_START:
+		{
+			linestatus = (symbol == NOTE_STAR_END) ? START : NOTE_STAR_START;
+			tmp_string_buf[buf_index] += old_string[index];
+			tmp_string_buf_type[buf_index] = NOTE_STAR_START;
+			if(linestatus != NOTE_STAR_START)
+			{
+				tmp_string_buf[++buf_index ] = "" ;
+				line_status =  START;
 			}
 			break;
 		}
 	}
 	return linestatus;
+}
+
+int CodeFileHanding::BracketNumCheck(void)
+{
+	int i=0;
+	int blank_num = 0;
+
+	last_bracket_num = bracket_num;
+	pre_blank_num = next_pre_blank_num;
+
+	for(i=0 ;i <= buf_index ;i++)
+	{
+		if(tmp_string_buf[i] == "(" && tmp_string_buf_type[i]  == BRACKETS)
+		{
+			bracket_num ++;
+		}
+		else if(tmp_string_buf[i] == ")" && tmp_string_buf_type[i]  == BRACKETS)
+		{
+			bracket_num --;
+		}
+
+		if(tmp_string_buf[i] == "{" && tmp_string_buf_type[i]  == SYMBOL)
+		{
+			next_pre_blank_num += g_indentation;
+		}
+		else if(tmp_string_buf[i] == "}" && tmp_string_buf_type[i]  == SYMBOL)
+		{
+			next_pre_blank_num -= g_indentation;
+		}
+	}
+	if(tmp_string_buf[0] == "}" && tmp_string_buf_type[0]  == SYMBOL)
+	{
+		blank_num = pre_blank_num - g_indentation;
+		bracket_num = 0;		//小括号容错，如果在大括号的时候，小括号数目不为0 ，则出错，将括号数目清零。
+	}
+	else
+	{
+		blank_num = pre_blank_num ;
+	}
+	//小括号处理
+	if(last_bracket_num > 0)
+	{
+		blank_num += g_indentation;
+	}
+
+	return blank_num;
 }
